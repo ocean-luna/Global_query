@@ -7,10 +7,10 @@ plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 dist_params = dict(backend="nccl")
 log_level = "INFO"
-work_dir = None
+work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_0909"
 
 total_batch_size = 48
-num_gpus = 8
+num_gpus = 4
 batch_size = total_batch_size // num_gpus
 num_iters_per_epoch = int(length[version] // (num_gpus * batch_size))
 num_epochs = 10
@@ -395,6 +395,47 @@ model = dict(
             gt_id_key="map_instance_id",
             with_instance_id=False,
             task_prefix='map',
+        ),
+        motion_for_det=dict(
+            type='MotionforDetHead',
+            decouple_attn=decouple_attn_motion,
+            embed_dims=embed_dims,
+            operation_order=(
+                [
+                    "temp_gnn",
+                    "norm",
+                    "temp_gnn",
+                    "norm",
+                    "ffn",                    
+                    "norm",
+                    "refine",
+                ]
+            ),
+            temp_graph_model=dict(
+                type="MultiheadAttention",
+                embed_dims=embed_dims if not decouple_attn_motion else embed_dims * 2,
+                num_heads=num_groups,
+                batch_first=True,
+                dropout=drop_out,
+            ),
+            norm_layer=dict(type="LN", normalized_shape=embed_dims),
+            ffn=dict(
+                type="AsymmetricFFN",
+                in_channels=embed_dims,
+                pre_norm=dict(type="LN"),
+                embed_dims=embed_dims,
+                feedforward_channels=embed_dims * 2,
+                num_fcs=2,
+                ffn_drop=drop_out,
+                act_cfg=dict(type="ReLU", inplace=True),
+            ),
+            refine_layer=dict(
+                type="SparseBox3DRefinementModule",
+                embed_dims=embed_dims,
+                num_cls=num_classes,
+                refine_yaw=True,
+                with_quality_estimation=with_quality_estimation,
+            ),
         ),
         motion_plan_head=dict(
             type='MotionPlanningHead',

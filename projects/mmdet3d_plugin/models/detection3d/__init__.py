@@ -7,3 +7,4 @@ from .detection3d_blocks import (
 )
 from .losses import SparseBox3DLoss
 from .detection3d_head import Sparse4DHead
+from .motion_for_det_head import MotionforDetHead

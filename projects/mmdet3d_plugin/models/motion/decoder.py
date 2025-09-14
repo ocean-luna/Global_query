@@ -129,9 +129,12 @@ class HierarchicalPlanningDecoder(object):
     ):
         classification = planning_output['classification'][-1]
         prediction = planning_output['prediction'][-1]
+        offset = planning_output['offset'][-1]
+        prediction = prediction - offset
         bs = classification.shape[0]
         classification = classification.reshape(bs, 3, self.ego_fut_mode)
         prediction = prediction.reshape(bs, 3, self.ego_fut_mode, self.ego_fut_ts, 2).cumsum(dim=-2)
+        # prediction = prediction - offset.reshape(bs, 3, self.ego_fut_mode, self.ego_fut_ts, 2)
         classification, final_planning = self.select(det_output, motion_output, classification, prediction, data)
         anchor_queue = planning_output["anchor_queue"]
         anchor_queue = torch.stack(anchor_queue, dim=2)

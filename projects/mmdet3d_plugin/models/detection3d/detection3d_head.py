@@ -169,6 +169,7 @@ class Sparse4DHead(BaseModule):
         self,
         feature_maps: Union[torch.Tensor, List],
         metas: dict,
+        use_motion_for_det: bool = False
     ):
         if isinstance(feature_maps, torch.Tensor):
             feature_maps = [feature_maps]
@@ -408,6 +409,9 @@ class Sparse4DHead(BaseModule):
                 cls, anchor, self.decoder.score_threshold
             )
             output["instance_id"] = instance_id
+        if use_motion_for_det:
+            output["time_interval"] = time_interval
+            output["anchor"] = anchor
         return output
 
     @force_fp32(apply_to=("model_outs"))

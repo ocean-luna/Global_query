@@ -213,6 +213,8 @@ class MotionPlanningHead(BaseModule):
         anchor_encoder,
         mask,
         anchor_handler,
+        use_motion_for_det = False,
+        instance_queue_get = None,
     ):   
         # =========== det/map feature/anchor ===========
         instance_feature = det_output["instance_feature"]
@@ -235,20 +237,29 @@ class MotionPlanningHead(BaseModule):
 
         # =========== get ego/temporal feature/anchor ===========
         bs, num_anchor, dim = instance_feature.shape
-        (
-            ego_feature,
-            ego_anchor,
-            temp_instance_feature,
-            temp_anchor,
-            temp_mask,
-        ) = self.instance_queue.get(
-            det_output,
-            feature_maps,
-            metas,
-            bs,
-            mask,
-            anchor_handler,
-        )
+        if not use_motion_for_det:
+            (
+                ego_feature,  # torch.Size([6, 1, 256])
+                ego_anchor,  # torch.Size([6, 1, 11])
+                temp_instance_feature,  # torch.Size([6, 901, 1, 256])
+                temp_anchor,  # torch.Size([6, 901, 1, 11])
+                temp_mask,  # torch.Size([6, 901, 1])
+            ) = self.instance_queue.get(
+                det_output,
+                feature_maps,
+                metas,
+                bs,
+                mask,
+                anchor_handler,
+            )
+        else:
+            (
+                ego_feature,  # torch.Size([6, 1, 256])
+                ego_anchor,  # torch.Size([6, 1, 11])
+                temp_instance_feature,  # torch.Size([6, 901, 1, 256])
+                temp_anchor,  # torch.Size([6, 901, 1, 11])
+                temp_mask,  # torch.Size([6, 901, 1])
+            ) = instance_queue_get
         ego_anchor_embed = anchor_encoder(ego_anchor)
         temp_anchor_embed = anchor_encoder(temp_anchor)
         temp_instance_feature = temp_instance_feature.flatten(0, 1)
@@ -279,6 +290,7 @@ class MotionPlanningHead(BaseModule):
         planning_classification = []
         planning_prediction = []
         planning_status = []
+        plan_reg_offsets = []
         for i, op in enumerate(self.operation_order):
             if self.layers[i] is None:
                 continue
@@ -320,6 +332,7 @@ class MotionPlanningHead(BaseModule):
                     plan_cls,
                     plan_reg,
                     plan_status,
+                    plan_reg_offset,
                 ) = self.layers[i](
                     motion_query,
                     plan_query,
@@ -331,6 +344,7 @@ class MotionPlanningHead(BaseModule):
                 planning_classification.append(plan_cls)
                 planning_prediction.append(plan_reg)
                 planning_status.append(plan_status)
+                plan_reg_offsets.append(plan_reg_offset)
         
         self.instance_queue.cache_motion(instance_feature[:, :num_anchor], det_output, metas)
         self.instance_queue.cache_planning(instance_feature[:, num_anchor:], plan_status)
@@ -340,13 +354,16 @@ class MotionPlanningHead(BaseModule):
             "prediction": motion_prediction,
             "period": self.instance_queue.period,
             "anchor_queue": self.instance_queue.anchor_queue,
+            "motion_query": motion_query,
         }
         planning_output = {
             "classification": planning_classification,
             "prediction": planning_prediction,
+            "offset": plan_reg_offsets,
             "status": planning_status,
             "period": self.instance_queue.ego_period,
             "anchor_queue": self.instance_queue.ego_anchor_queue,
+            
         }
         return motion_output, planning_output
     
@@ -414,10 +431,11 @@ class MotionPlanningHead(BaseModule):
     def loss_planning(self, model_outs, data):
         cls_scores = model_outs["classification"]
         reg_preds = model_outs["prediction"]
+        reg_offsets = model_outs["offset"]
         status_preds = model_outs["status"]
         output = {}
-        for decoder_idx, (cls, reg, status) in enumerate(
-            zip(cls_scores, reg_preds, status_preds)
+        for decoder_idx, (cls, reg, status, offset) in enumerate(
+            zip(cls_scores, reg_preds, status_preds, reg_offsets)
         ):
             (
                 cls,
@@ -429,6 +447,7 @@ class MotionPlanningHead(BaseModule):
             ) = self.planning_sampler.sample(
                 cls,
                 reg,
+                offset,
                 data['gt_ego_fut_trajs'],
                 data['gt_ego_fut_masks'],
                 data,
@@ -479,5 +498,6 @@ class MotionPlanningHead(BaseModule):
             planning_output, 
             data,
         )
+        # planning_result["prediction"] = planning_result["prediction"] - planning_result["offset"] 
 
         return motion_result, planning_result
