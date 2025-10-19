@@ -6,6 +6,7 @@ from .blocks import (
     AsymmetricFFN,
 )
 from .instance_bank import InstanceBank
+from .global_instance_bank import GlobalInstanceBank
 from .detection3d import (
     SparseBox3DDecoder,
     SparseBox3DTarget,
@@ -23,6 +24,7 @@ __all__ = [
     "DeformableFeatureAggregation",
     "DenseDepthNet",
     "AsymmetricFFN",
+    "GlobalInstanceBank",
     "InstanceBank",
     "SparseBox3DDecoder",
     "SparseBox3DTarget",

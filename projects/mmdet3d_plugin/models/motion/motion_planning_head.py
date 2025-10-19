@@ -42,7 +42,6 @@ class MotionPlanningHead(BaseModule):
         plan_anchor=None,
         embed_dims=256,
         decouple_attn=False,
-        instance_queue=None,
         operation_order=None,
         temp_graph_model=None,
         graph_model=None,
@@ -77,7 +76,6 @@ class MotionPlanningHead(BaseModule):
                 return None
             return build_from_cfg(cfg, registry)
         
-        self.instance_queue = build(instance_queue, PLUGIN_LAYERS)
         self.motion_sampler = build(motion_sampler, BBOX_SAMPLERS)
         self.planning_sampler = build(planning_sampler, BBOX_SAMPLERS)
         self.motion_decoder = build(motion_decoder, BBOX_CODERS)
@@ -205,7 +203,7 @@ class MotionPlanningHead(BaseModule):
         )
 
     def forward(
-        self, 
+        self,
         det_output,
         map_output,
         feature_maps,
@@ -213,6 +211,7 @@ class MotionPlanningHead(BaseModule):
         anchor_encoder,
         mask,
         anchor_handler,
+        instance_queue,
         use_motion_for_det = False,
         instance_queue_get = None,
     ):   
@@ -244,7 +243,7 @@ class MotionPlanningHead(BaseModule):
                 temp_instance_feature,  # torch.Size([6, 901, 1, 256])
                 temp_anchor,  # torch.Size([6, 901, 1, 11])
                 temp_mask,  # torch.Size([6, 901, 1])
-            ) = self.instance_queue.get(
+            ) = instance_queue.get(
                 det_output,
                 feature_maps,
                 metas,
@@ -346,14 +345,14 @@ class MotionPlanningHead(BaseModule):
                 planning_status.append(plan_status)
                 plan_reg_offsets.append(plan_reg_offset)
         
-        self.instance_queue.cache_motion(instance_feature[:, :num_anchor], det_output, metas)
-        self.instance_queue.cache_planning(instance_feature[:, num_anchor:], plan_status)
+        instance_queue.cache_motion(instance_feature[:, :num_anchor], det_output, metas)
+        instance_queue.cache_planning(instance_feature[:, num_anchor:], plan_status)
 
         motion_output = {
             "classification": motion_classification,
             "prediction": motion_prediction,
-            "period": self.instance_queue.period,
-            "anchor_queue": self.instance_queue.anchor_queue,
+            "period": instance_queue.period,
+            "anchor_queue": instance_queue.anchor_queue,
             "motion_query": motion_query,
         }
         planning_output = {
@@ -361,8 +360,8 @@ class MotionPlanningHead(BaseModule):
             "prediction": planning_prediction,
             "offset": plan_reg_offsets,
             "status": planning_status,
-            "period": self.instance_queue.ego_period,
-            "anchor_queue": self.instance_queue.ego_anchor_queue,
+            "period": instance_queue.ego_period,
+            "anchor_queue": instance_queue.ego_anchor_queue,
             
         }
         return motion_output, planning_output

@@ -7,9 +7,9 @@ plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 dist_params = dict(backend="nccl")
 log_level = "INFO"
-work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_0909"
+work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_1007"
 
-total_batch_size = 48
+total_batch_size = 24
 num_gpus = 4
 batch_size = total_batch_size // num_gpus
 num_iters_per_epoch = int(length[version] // (num_gpus * batch_size))
@@ -119,11 +119,9 @@ model = dict(
     head=dict(
         type="SparseDriveHead",
         task_config=task_config,
-        det_head=dict(
-            type="Sparse4DHead",
-            cls_threshold_to_reg=0.05,
-            decouple_attn=decouple_attn,
-            instance_bank=dict(
+        global_bank=dict(
+            type="GlobalInstanceBank",
+            det_instance_bank=dict(
                 type="InstanceBank",
                 num_anchor=900,
                 embed_dims=embed_dims,
@@ -133,6 +131,29 @@ model = dict(
                 confidence_decay=0.6,
                 feat_grad=False,
             ),
+            map_instance_bank=dict(
+                type="InstanceBank",
+                num_anchor=100,
+                embed_dims=embed_dims,
+                anchor="data/kmeans/kmeans_map_100.npy",
+                anchor_handler=dict(type="SparsePoint3DKeyPointsGenerator"),
+                num_temp_instances=33 if temporal_map else -1,
+                confidence_decay=0.6,
+                feat_grad=True,
+            ),
+            motion_plan_instance_queue=dict(
+                type="InstanceQueue",
+                embed_dims=embed_dims,
+                queue_length=queue_length,
+                tracking_threshold=0.2,
+                feature_map_scale=(input_shape[1]/strides[-1], input_shape[0]/strides[-1]),
+            ),
+        ),
+        det_head=dict(
+            type="Sparse4DHead",
+            embed_dims=embed_dims,
+            cls_threshold_to_reg=0.05,
+            decouple_attn=decouple_attn,
             anchor_encoder=dict(
                 type="SparseBox3DEncoder",
                 vel_dims=3,
@@ -266,18 +287,9 @@ model = dict(
         ),
         map_head=dict(
             type="Sparse4DHead",
+            embed_dims=embed_dims,
             cls_threshold_to_reg=0.05,
             decouple_attn=decouple_attn_map,
-            instance_bank=dict(
-                type="InstanceBank",
-                num_anchor=100,
-                embed_dims=embed_dims,
-                anchor="data/kmeans/kmeans_map_100.npy",
-                anchor_handler=dict(type="SparsePoint3DKeyPointsGenerator"),
-                num_temp_instances=33 if temporal_map else -1,
-                confidence_decay=0.6,
-                feat_grad=True,
-            ),
             anchor_encoder=dict(
                 type="SparsePoint3DEncoder",
                 embed_dims=embed_dims,
@@ -447,13 +459,6 @@ model = dict(
             plan_anchor=f'data/kmeans/kmeans_plan_{ego_fut_mode}.npy',
             embed_dims=embed_dims,
             decouple_attn=decouple_attn_motion,
-            instance_queue=dict(
-                type="InstanceQueue",
-                embed_dims=embed_dims,
-                queue_length=queue_length,
-                tracking_threshold=0.2,
-                feature_map_scale=(input_shape[1]/strides[-1], input_shape[0]/strides[-1]),
-            ),
             operation_order=(
                 [
                     "temp_gnn",

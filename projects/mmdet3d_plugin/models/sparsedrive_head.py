@@ -8,34 +8,8 @@ import torch.nn as nn
 from mmcv.runner import BaseModule
 from mmdet.models import HEADS
 from mmdet.models import build_head
-
-
-class FusionQueryModel(BaseModule):
-    def __init__(self, num_class = 6, dropout = 0.1, hidden_dim = 256):
-        super(FusionQueryModel, self).__init__()
-        self.num_class = num_class
-        self.avg_pool = nn.AvgPool1d(kernel_size=num_class)
-        # input_channel = 512
-        # output_channel = 256
-        # self.query_mlp = nn.Sequential(
-        #     nn.Linear(input_channel, hidden_dim),
-        #     nn.ReLU(inplace=True),
-        #     nn.Dropout(dropout),
-        #     nn.Linear(hidden_dim, output_channel)
-        # )
-    
-    def forward(self, instance_feature, motion_query, classification):
-        classification = classification[-1].unsqueeze(-1)  # [B, 900, 6, 1]
-        motion_query_feature = motion_query * classification  # [B, 900, 6, 256]
-        motion_query_feature = motion_query_feature.transpose(2, 3)
-        bs, num_query, channel, _ = motion_query_feature.shape
-        motion_query_feature = motion_query_feature.reshape(bs, num_query * channel, self.num_class)
-        motion_query_feature = self.avg_pool(motion_query_feature)  # [B, 900, 256, 1]
-        motion_query_feature = motion_query_feature.squeeze(-1).reshape(bs, num_query, channel)  # [B, 900, 256]
-        # merge_query = torch.concat([instance_feature, motion_query_feature], dim = -1)
-        # output = self.query_mlp(merge_query)
-        output = motion_query_feature + instance_feature
-        return output
+from mmcv.utils import build_from_cfg
+from mmcv.cnn.bricks.registry import PLUGIN_LAYERS
 
 
 @HEADS.register_module()
@@ -43,6 +17,7 @@ class SparseDriveHead(BaseModule):
     def __init__(
         self,
         task_config: dict,
+        global_bank = dict,
         det_head = dict,
         map_head = dict,
         motion_plan_head = dict,
@@ -56,6 +31,7 @@ class SparseDriveHead(BaseModule):
             self.det_head = build_head(det_head)
         if self.task_config['with_map']:
             self.map_head = build_head(map_head)
+        self.global_bank = build_from_cfg(global_bank, PLUGIN_LAYERS)
         
         self.use_motion_for_det = False
         if self.task_config['with_motion_plan']:
@@ -71,6 +47,7 @@ class SparseDriveHead(BaseModule):
             self.map_head.init_weights()
         if self.task_config['with_motion_plan']:
             self.motion_plan_head.init_weights()
+        self.global_bank.init_weights()
 
     def forward(
         self,
@@ -78,12 +55,12 @@ class SparseDriveHead(BaseModule):
         metas: dict,
     ):
         if self.task_config['with_det']:
-            det_output = self.det_head(feature_maps, metas, self.use_motion_for_det)
+            det_output = self.det_head(feature_maps, metas, self.global_bank.det_instance_bank, self.use_motion_for_det)
         else:
             det_output = None
 
         if self.task_config['with_map']:
-            map_output = self.map_head(feature_maps, metas)
+            map_output = self.map_head(feature_maps, metas, self.global_bank.map_instance_bank)
         else:
             map_output = None
 
@@ -94,10 +71,10 @@ class SparseDriveHead(BaseModule):
                 feature_maps,
                 metas,
                 self.det_head.anchor_encoder,
-                self.det_head.instance_bank,
-                self.det_head.instance_bank.mask,
-                self.det_head.instance_bank.anchor_handler,
-                self.motion_plan_head.instance_queue,
+                self.global_bank.det_instance_bank,
+                self.global_bank.det_instance_bank.mask,
+                self.global_bank.det_instance_bank.anchor_handler,
+                self.global_bank.motion_plan_instance_queue,
             )
         
         if self.task_config['with_motion_plan']:
@@ -107,8 +84,9 @@ class SparseDriveHead(BaseModule):
                 feature_maps,
                 metas,
                 self.det_head.anchor_encoder,
-                self.det_head.instance_bank.mask,
-                self.det_head.instance_bank.anchor_handler,
+                self.global_bank.det_instance_bank.mask,
+                self.global_bank.det_instance_bank.anchor_handler,
+                self.global_bank.motion_plan_instance_queue,
                 use_motion_for_det=self.use_motion_for_det,
                 instance_queue_get=instance_queue_get,
             )
@@ -127,6 +105,9 @@ class SparseDriveHead(BaseModule):
         if self.task_config['with_map']:
             loss_map = self.map_head.loss(map_output, data)
             losses.update(loss_map)
+        
+        loss_diffusion = self.motion_for_det.loss(det_output)
+        losses.update(loss_diffusion)
 
         if self.task_config['with_motion_plan']:
             motion_loss_cache = dict(

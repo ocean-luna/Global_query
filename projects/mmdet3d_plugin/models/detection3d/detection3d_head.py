@@ -28,13 +28,13 @@ __all__ = ["Sparse4DHead"]
 class Sparse4DHead(BaseModule):
     def __init__(
         self,
-        instance_bank: dict,
         anchor_encoder: dict,
         graph_model: dict,
         norm_layer: dict,
         ffn: dict,
         deformable_model: dict,
         refine_layer: dict,
+        embed_dims: int = 256,
         num_decoder: int = 6,
         num_single_frame_decoder: int = -1,
         temp_graph_model: dict = None,
@@ -93,7 +93,6 @@ class Sparse4DHead(BaseModule):
                 return None
             return build_from_cfg(cfg, registry)
 
-        self.instance_bank = build(instance_bank, PLUGIN_LAYERS)
         self.anchor_encoder = build(anchor_encoder, POSITIONAL_ENCODING)
         self.sampler = build(sampler, BBOX_SAMPLERS)
         self.decoder = build(decoder, BBOX_CODERS)
@@ -113,7 +112,7 @@ class Sparse4DHead(BaseModule):
                 for op in self.operation_order
             ]
         )
-        self.embed_dims = self.instance_bank.embed_dims
+        self.embed_dims = embed_dims
         if self.decouple_attn:
             self.fc_before = nn.Linear(
                 self.embed_dims, self.embed_dims * 2, bias=False
@@ -169,6 +168,7 @@ class Sparse4DHead(BaseModule):
         self,
         feature_maps: Union[torch.Tensor, List],
         metas: dict,
+        instance_bank,
         use_motion_for_det: bool = False
     ):
         if isinstance(feature_maps, torch.Tensor):
@@ -187,7 +187,7 @@ class Sparse4DHead(BaseModule):
             temp_instance_feature,
             temp_anchor,
             time_interval,
-        ) = self.instance_bank.get(
+        ) = instance_bank.get(
             batch_size, metas, dn_metas=self.sampler.dn_metas
         )
 
@@ -305,7 +305,7 @@ class Sparse4DHead(BaseModule):
                 classification.append(cls)
                 quality.append(qt)
                 if len(prediction) == self.num_single_frame_decoder:
-                    instance_feature, anchor = self.instance_bank.update(
+                    instance_feature, anchor = instance_bank.update(
                         instance_feature, anchor, cls
                     )
                     if (
@@ -327,8 +327,8 @@ class Sparse4DHead(BaseModule):
                             dn_cls_target,
                             valid_mask,
                             dn_id_target,
-                            self.instance_bank.num_anchor,
-                            self.instance_bank.mask,
+                            instance_bank.num_anchor,
+                            instance_bank.mask,
                         )
                 anchor_embed = self.anchor_encoder(anchor)
                 if (
@@ -336,7 +336,7 @@ class Sparse4DHead(BaseModule):
                     and temp_anchor_embed is not None
                 ):
                     temp_anchor_embed = anchor_embed[
-                        :, : self.instance_bank.num_temp_instances
+                        :, : instance_bank.num_temp_instances
                     ]
             else:
                 raise NotImplementedError(f"{op} is not supported.")
@@ -401,11 +401,11 @@ class Sparse4DHead(BaseModule):
         )
 
         # cache current instances for temporal modeling
-        self.instance_bank.cache(
+        instance_bank.cache(
             instance_feature, anchor, cls, metas, feature_maps
         )
         if self.with_instance_id:
-            instance_id = self.instance_bank.get_instance_id(
+            instance_id = instance_bank.get_instance_id(
                 cls, anchor, self.decoder.score_threshold
             )
             output["instance_id"] = instance_id
