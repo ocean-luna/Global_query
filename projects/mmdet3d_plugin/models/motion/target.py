@@ -23,13 +23,9 @@ def get_best_reg(
     reg_preds, 
     reg_target,
     reg_weight,
-    reg_offset = None
 ):
     bs, num_pred, mode, ts, d = reg_preds.shape
-    # if reg_offset is not None:
-    #     reg_preds = reg_preds - reg_offset
     reg_preds_cum = reg_preds.cumsum(dim=-2)
-
     reg_target_cum = reg_target.cumsum(dim=-2)
     dist = torch.linalg.norm(reg_target_cum.unsqueeze(2) - reg_preds_cum, dim=-1)
     dist = dist * reg_weight.unsqueeze(2)
@@ -37,11 +33,7 @@ def get_best_reg(
     mode_idx = torch.argmin(dist, dim=-1)
     mode_idx = mode_idx[..., None, None, None].repeat(1, 1, 1, ts, d)
     best_reg = torch.gather(reg_preds, 2, mode_idx).squeeze(2)
-    # if reg_offset is None: 
     return best_reg
-    # else:
-    #     best_offset = torch.gather(reg_offset, 2, mode_idx).squeeze(2)
-    # return best_reg, best_offset
 
 
 @BBOX_SAMPLERS.register_module()
@@ -92,7 +84,6 @@ class PlanningTarget():
         self,
         cls_pred,
         reg_pred,
-        offset_pred,
         gt_reg_target,
         gt_reg_mask,
         data,
@@ -103,17 +94,13 @@ class PlanningTarget():
         bs = reg_pred.shape[0]
         bs_indices = torch.arange(bs, device=reg_pred.device)
         cmd = data['gt_ego_fut_cmd'].argmax(dim=-1)
+
         cls_pred = cls_pred.reshape(bs, 3, 1, self.ego_fut_mode)
         reg_pred = reg_pred.reshape(bs, 3, 1, self.ego_fut_mode, self.ego_fut_ts, 2)
-        offset_pred = offset_pred.reshape(bs, 3, 1, self.ego_fut_mode, self.ego_fut_ts, 2)
-        reg_pred = reg_pred - offset_pred
         cls_pred = cls_pred[bs_indices, cmd]
         reg_pred = reg_pred[bs_indices, cmd]
-        offset_pred = offset_pred[bs_indices, cmd]
         cls_target = get_cls_target(reg_pred, gt_reg_target, gt_reg_mask)
         cls_weight = gt_reg_mask.any(dim=-1)
-        best_reg = get_best_reg(reg_pred, gt_reg_target, gt_reg_mask, offset_pred)
+        best_reg = get_best_reg(reg_pred, gt_reg_target, gt_reg_mask)
 
         return cls_pred, cls_target, cls_weight, best_reg, gt_reg_target, gt_reg_mask
-
-

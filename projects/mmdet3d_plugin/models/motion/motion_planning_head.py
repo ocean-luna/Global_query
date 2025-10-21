@@ -289,7 +289,6 @@ class MotionPlanningHead(BaseModule):
         planning_classification = []
         planning_prediction = []
         planning_status = []
-        plan_reg_offsets = []
         for i, op in enumerate(self.operation_order):
             if self.layers[i] is None:
                 continue
@@ -331,7 +330,6 @@ class MotionPlanningHead(BaseModule):
                     plan_cls,
                     plan_reg,
                     plan_status,
-                    plan_reg_offset,
                 ) = self.layers[i](
                     motion_query,
                     plan_query,
@@ -343,7 +341,6 @@ class MotionPlanningHead(BaseModule):
                 planning_classification.append(plan_cls)
                 planning_prediction.append(plan_reg)
                 planning_status.append(plan_status)
-                plan_reg_offsets.append(plan_reg_offset)
         
         instance_queue.cache_motion(instance_feature[:, :num_anchor], det_output, metas)
         instance_queue.cache_planning(instance_feature[:, num_anchor:], plan_status)
@@ -358,7 +355,6 @@ class MotionPlanningHead(BaseModule):
         planning_output = {
             "classification": planning_classification,
             "prediction": planning_prediction,
-            "offset": plan_reg_offsets,
             "status": planning_status,
             "period": instance_queue.ego_period,
             "anchor_queue": instance_queue.ego_anchor_queue,
@@ -430,11 +426,10 @@ class MotionPlanningHead(BaseModule):
     def loss_planning(self, model_outs, data):
         cls_scores = model_outs["classification"]
         reg_preds = model_outs["prediction"]
-        reg_offsets = model_outs["offset"]
         status_preds = model_outs["status"]
         output = {}
-        for decoder_idx, (cls, reg, status, offset) in enumerate(
-            zip(cls_scores, reg_preds, status_preds, reg_offsets)
+        for decoder_idx, (cls, reg, status) in enumerate(
+            zip(cls_scores, reg_preds, status_preds)
         ):
             (
                 cls,
@@ -446,7 +441,6 @@ class MotionPlanningHead(BaseModule):
             ) = self.planning_sampler.sample(
                 cls,
                 reg,
-                offset,
                 data['gt_ego_fut_trajs'],
                 data['gt_ego_fut_masks'],
                 data,
@@ -497,6 +491,5 @@ class MotionPlanningHead(BaseModule):
             planning_output, 
             data,
         )
-        # planning_result["prediction"] = planning_result["prediction"] - planning_result["offset"] 
 
         return motion_result, planning_result

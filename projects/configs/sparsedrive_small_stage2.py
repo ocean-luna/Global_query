@@ -7,7 +7,7 @@ plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 dist_params = dict(backend="nccl")
 log_level = "INFO"
-work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_1007"
+work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_1019"
 
 total_batch_size = 24
 num_gpus = 4
