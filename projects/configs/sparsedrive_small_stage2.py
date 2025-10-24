@@ -7,13 +7,13 @@ plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 dist_params = dict(backend="nccl")
 log_level = "INFO"
-work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_1019"
+work_dir = "/home/ldaphome/seanl/code/liuxin/code/SparseDrive/work_dirs/sparsedrive_small_stage2_1024"
 
-total_batch_size = 24
-num_gpus = 4
+total_batch_size = 12
+num_gpus = 2
 batch_size = total_batch_size // num_gpus
 num_iters_per_epoch = int(length[version] // (num_gpus * batch_size))
-num_epochs = 10
+num_epochs = 12
 checkpoint_epoch_interval = 10
 
 checkpoint_config = dict(
@@ -523,7 +523,7 @@ model = dict(
                 alpha=0.25,
                 loss_weight=0.2
             ),
-            motion_loss_reg=dict(type='L1Loss', loss_weight=0.2),
+            motion_loss_reg=dict(type='GMMNLLWithModeLoss', loss_weight=0.2),
             planning_sampler=dict(
                 type="PlanningTarget",
                 ego_fut_ts=ego_fut_ts,

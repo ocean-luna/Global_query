@@ -39,7 +39,7 @@ class MotionPlanningRefinementModule(BaseModule):
             nn.ReLU(),
             nn.Linear(embed_dims, embed_dims),
             nn.ReLU(),
-            nn.Linear(embed_dims, fut_ts * 2),
+            nn.Linear(embed_dims, fut_ts * 5),
         )
         self.plan_cls_branch = nn.Sequential(
             *linear_relu_ln(embed_dims, 1, 2),
@@ -74,7 +74,7 @@ class MotionPlanningRefinementModule(BaseModule):
     ):
         bs, num_anchor = motion_query.shape[:2]
         motion_cls = self.motion_cls_branch(motion_query).squeeze(-1)
-        motion_reg = self.motion_reg_branch(motion_query).reshape(bs, num_anchor, self.fut_mode, self.fut_ts, 2)
+        motion_reg = self.motion_reg_branch(motion_query).reshape(bs, num_anchor, self.fut_mode, self.fut_ts, 5)
         plan_cls = self.plan_cls_branch(plan_query).squeeze(-1)
         plan_reg = self.plan_reg_branch(plan_query).reshape(bs, 1, 3 * self.ego_fut_mode, self.ego_fut_ts, 2)
         planning_status = self.plan_status_branch(ego_feature + ego_anchor_embed)

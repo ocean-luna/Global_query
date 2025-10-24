@@ -24,8 +24,9 @@ def get_best_reg(
     reg_target,
     reg_weight,
 ):
+    reg_preds_xy = reg_preds[:, :, :, :, :2]
     bs, num_pred, mode, ts, d = reg_preds.shape
-    reg_preds_cum = reg_preds.cumsum(dim=-2)
+    reg_preds_cum = reg_preds_xy.cumsum(dim=-2)
     reg_target_cum = reg_target.cumsum(dim=-2)
     dist = torch.linalg.norm(reg_target_cum.unsqueeze(2) - reg_preds_cum, dim=-1)
     dist = dist * reg_weight.unsqueeze(2)
@@ -50,11 +51,12 @@ class MotionTarget():
         gt_reg_mask,
         motion_loss_cache,
     ):
-        bs, num_anchor, mode, ts, d = reg_pred.shape
-        reg_target = reg_pred.new_zeros((bs, num_anchor, ts, d))
-        reg_weight = reg_pred.new_zeros((bs, num_anchor, ts))
+        reg_pred_xy = reg_pred[:, :, :, :, :2]
+        bs, num_anchor, mode, ts, d = reg_pred_xy.shape
+        reg_target = reg_pred_xy.new_zeros((bs, num_anchor, ts, d))
+        reg_weight = reg_pred_xy.new_zeros((bs, num_anchor, ts))
         indices = motion_loss_cache['indices']
-        num_pos = reg_pred.new_tensor([0])
+        num_pos = reg_pred_xy.new_tensor([0])
         for i, (pred_idx, target_idx) in enumerate(indices):
             if len(gt_reg_target[i]) == 0:
                 continue
@@ -62,7 +64,7 @@ class MotionTarget():
             reg_weight[i, pred_idx] = gt_reg_mask[i][target_idx]
             num_pos += len(pred_idx)
         
-        cls_target = get_cls_target(reg_pred, reg_target, reg_weight)
+        cls_target = get_cls_target(reg_pred_xy, reg_target, reg_weight)
         cls_weight = reg_weight.any(dim=-1)
         best_reg = get_best_reg(reg_pred, reg_target, reg_weight)
 

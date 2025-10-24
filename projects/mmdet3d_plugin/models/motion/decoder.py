@@ -77,7 +77,7 @@ class SparseBox3DMotionDecoder(SparseBox3DDecoder):
                     scores_origin = scores_origin[mask[i]]
 
             box = decode_box(box)
-            trajs = motion_output["prediction"][-1]
+            trajs = motion_output["prediction"][-1][:, :, :, :, :2]
             traj_cls = motion_output["classification"][-1].sigmoid()
             traj = trajs[i, indices[i] // num_cls]
             traj_cls = traj_cls[i, indices[i] // num_cls]

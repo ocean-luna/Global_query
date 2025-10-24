@@ -407,8 +407,8 @@ class MotionPlanningHead(BaseModule):
             reg_pred = reg_pred.flatten(end_dim=1)
             reg_target = reg_target.flatten(end_dim=1)
             reg_weight = reg_weight.unsqueeze(-1)
-            reg_pred = reg_pred.cumsum(dim=-2)
-            reg_target = reg_target.cumsum(dim=-2)
+            # reg_pred = reg_pred.cumsum(dim=-2)
+            # reg_target = reg_target.cumsum(dim=-2)
             reg_loss = self.motion_loss_reg(
                 reg_pred, reg_target, weight=reg_weight, avg_factor=num_pos
             )
