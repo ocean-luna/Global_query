@@ -3,4 +3,4 @@ from .motion_blocks import MotionPlanningRefinementModule
 from .instance_queue import InstanceQueue
 from .target import MotionTarget, PlanningTarget
 from .decoder import SparseBox3DMotionDecoder, HierarchicalPlanningDecoder
-from .loss import GMMNLLWithModeLoss
+from .loss import LaplaceNLLLoss

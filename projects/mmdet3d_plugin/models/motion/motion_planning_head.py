@@ -410,7 +410,7 @@ class MotionPlanningHead(BaseModule):
             # reg_pred = reg_pred.cumsum(dim=-2)
             # reg_target = reg_target.cumsum(dim=-2)
             reg_loss = self.motion_loss_reg(
-                reg_pred, reg_target, weight=reg_weight, avg_factor=num_pos
+                reg_pred, reg_target, weight=reg_weight
             )
 
             output.update(
@@ -478,6 +478,7 @@ class MotionPlanningHead(BaseModule):
         planning_output,
         data,
     ):
+        motion_output["prediction"][-1] = motion_output["prediction"][-1][..., :2]
         motion_result = self.motion_decoder.decode(
             det_output["classification"],
             det_output["prediction"],

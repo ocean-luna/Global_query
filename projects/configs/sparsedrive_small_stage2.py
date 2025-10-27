@@ -523,7 +523,7 @@ model = dict(
                 alpha=0.25,
                 loss_weight=0.2
             ),
-            motion_loss_reg=dict(type='GMMNLLWithModeLoss', loss_weight=0.2),
+            motion_loss_reg=dict(type='LaplaceNLLLoss', loss_weight=0.1),
             planning_sampler=dict(
                 type="PlanningTarget",
                 ego_fut_ts=ego_fut_ts,
